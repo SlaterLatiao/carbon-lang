@@ -31,7 +31,7 @@ static auto ResolveUnformed(
 static auto ResolveUnformed(
     Nonnull<const Pattern*> pattern,
     std::unordered_map<Nonnull<const AstNode*>, FlowFact>& flow_facts,
-    bool has_init) -> ErrorOr<Success>;
+    bool has_init = false) -> ErrorOr<Success>;
 static auto ResolveUnformed(
     Nonnull<const Statement*> statement,
     std::unordered_map<Nonnull<const AstNode*>, FlowFact>& flow_facts)
@@ -119,7 +119,7 @@ static auto ResolveUnformed(
 static auto ResolveUnformed(
     Nonnull<const Pattern*> pattern,
     std::unordered_map<Nonnull<const AstNode*>, FlowFact>& flow_facts,
-    const bool has_init) -> ErrorOr<Success> {
+    const bool has_init /*=false*/) -> ErrorOr<Success> {
   switch (pattern->kind()) {
     case PatternKind::BindingPattern:
       flow_facts.insert(
@@ -162,9 +162,12 @@ static auto ResolveUnformed(
                                              /*has_init=*/def.has_init()));
       break;
     }
-    case StatementKind::ReturnVar:
-      // TODO: @slaterlatiao: Implement this flow.
+    case StatementKind::ReturnVar: {
+      auto& ret_var = cast<ReturnVar>(*statement);
+      CARBON_RETURN_IF_ERROR(ResolveUnformed(
+          &cast<BindingPattern>(ret_var.value_node().base()), flow_facts));
       break;
+    }
     case StatementKind::ReturnExpression: {
       auto& ret_exp_stmt = cast<ReturnExpression>(*statement);
       CARBON_RETURN_IF_ERROR(
@@ -184,11 +187,37 @@ static auto ResolveUnformed(
           ResolveUnformed(&exp_stmt.expression(), flow_facts));
       break;
     }
+    case StatementKind::If: {
+      auto& if_stmt = cast<If>(*statement);
+      CARBON_RETURN_IF_ERROR(ResolveUnformed(&if_stmt.condition(), flow_facts));
+      CARBON_RETURN_IF_ERROR(
+          ResolveUnformed(&if_stmt.then_block(), flow_facts));
+      if (if_stmt.else_block().has_value()) {
+        CARBON_RETURN_IF_ERROR(
+            ResolveUnformed(*if_stmt.else_block(), flow_facts));
+      }
+      break;
+    }
+    case StatementKind::While: {
+      auto& while_stmt = cast<While>(*statement);
+      CARBON_RETURN_IF_ERROR(
+          ResolveUnformed(&while_stmt.condition(), flow_facts));
+      CARBON_RETURN_IF_ERROR(ResolveUnformed(&while_stmt.body(), flow_facts));
+      break;
+    }
+    case StatementKind::Match: {
+      auto& match = cast<Match>(*statement);
+      CARBON_RETURN_IF_ERROR(ResolveUnformed(&match.expression(), flow_facts));
+      for (auto& clause : match.clauses()) {
+        CARBON_RETURN_IF_ERROR(ResolveUnformed(&clause.pattern(), flow_facts,
+                                               /*set_formed=*/true));
+        CARBON_RETURN_IF_ERROR(
+            ResolveUnformed(&clause.statement(), flow_facts));
+      }
+      break;
+    }
     case StatementKind::Break:
     case StatementKind::Continue:
-    case StatementKind::If:
-    case StatementKind::While:
-    case StatementKind::Match:
     case StatementKind::Continuation:
     case StatementKind::Run:
     case StatementKind::Await:

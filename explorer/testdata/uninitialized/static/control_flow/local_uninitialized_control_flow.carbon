@@ -11,8 +11,6 @@
 
 package ExplorerTest api;
 
-var x: i32;
-
 fn Main() -> i32 {
   var x: i32;
   if (0 == 0) {

@@ -208,11 +208,39 @@ static auto ResolveUnformed(
                                              /*set_formed=*/false));
       break;
     }
+    case StatementKind::If: {
+      auto& if_stmt = cast<If>(*statement);
+      CARBON_RETURN_IF_ERROR(ResolveUnformed(&if_stmt.condition(), flow_facts,
+                                             /*set_formed=*/false));
+      CARBON_RETURN_IF_ERROR(
+          ResolveUnformed(&if_stmt.then_block(), flow_facts));
+      if (if_stmt.else_block().has_value()) {
+        CARBON_RETURN_IF_ERROR(
+            ResolveUnformed(*if_stmt.else_block(), flow_facts));
+      }
+      break;
+    }
+    case StatementKind::While: {
+      auto& while_stmt = cast<While>(*statement);
+      CARBON_RETURN_IF_ERROR(ResolveUnformed(&while_stmt.condition(),
+                                             flow_facts, /*set_formed=*/false));
+      CARBON_RETURN_IF_ERROR(ResolveUnformed(&while_stmt.body(), flow_facts));
+      break;
+    }
+    case StatementKind::Match: {
+      auto& match = cast<Match>(*statement);
+      CARBON_RETURN_IF_ERROR(ResolveUnformed(&match.expression(), flow_facts,
+                                             /*set_formed=*/false));
+      for (auto& clause : match.clauses()) {
+        CARBON_RETURN_IF_ERROR(ResolveUnformed(&clause.pattern(), flow_facts,
+                                               /*set_formed=*/true));
+        CARBON_RETURN_IF_ERROR(
+            ResolveUnformed(&clause.statement(), flow_facts));
+      }
+      break;
+    }
     case StatementKind::Break:
     case StatementKind::Continue:
-    case StatementKind::If:
-    case StatementKind::While:
-    case StatementKind::Match:
     case StatementKind::Continuation:
     case StatementKind::Run:
     case StatementKind::Await:
